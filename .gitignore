@@ -1,3 +1,8 @@
+# Data / runtime
+data/
+*.egg-info/
+.eggs/
+
 # Dependencies
 node_modules/
 .venv/
