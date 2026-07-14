@@ -3,9 +3,14 @@
 import logging
 from datetime import UTC, datetime
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 from src.config import Settings
 from src.db.repository import Repository
@@ -14,6 +19,8 @@ from src.services.invite import InviteService, parse_create_args
 logger = logging.getLogger(__name__)
 
 ADMIN_DENY = "⛔ Команда доступна только администраторам."
+CB_REVOKE = "inv:rv:"
+CB_LIST = "inv:list"
 
 
 def create_admin_router(
@@ -23,79 +30,151 @@ def create_admin_router(
 ) -> Router:
     router = Router(name="admin")
 
-    def _is_admin(message: Message) -> bool:
-        return settings.is_admin(message.from_user.id)
+    def _is_admin_user(user_id: int | None) -> bool:
+        return user_id is not None and settings.is_admin(user_id)
+
+    def _create_params_from_args(args: str) -> dict:
+        params = parse_create_args(args)
+        return {
+            "label": params.get("label"),
+            "password": params.get("password"),
+            "days": int(params["days"]) if params.get("days", "").isdigit() else None,
+            "max_uses": int(params["uses"]) if params.get("uses", "").isdigit() else None,
+        }
+
+    def _format_invites_list() -> tuple[str, InlineKeyboardMarkup | None]:
+        invites = repository.list_active_invites()
+        if not invites:
+            return "📋 Активных приглашений нет.", None
+
+        from src.utils.timefmt import to_msk
+
+        lines = ["📋 Активные приглашения:"]
+        buttons: list[list[InlineKeyboardButton]] = []
+        for i, inv in enumerate(invites, 1):
+            label = inv.get("label") or "без метки"
+            uses = invite_service.get_invite_uses_label(inv)
+            exp_dt = datetime.fromisoformat(inv["expires_at"])
+            exp = to_msk(exp_dt).strftime("%d.%m")
+            link = invite_service.build_link(inv["token"])
+            lines.append(f"{i}. {label} — {uses} — до {exp}\n{link}")
+            btn_label = f"Отозвать: {label}" if inv.get("label") else f"Отозвать #{i}"
+            if len(btn_label) > 64:
+                btn_label = f"Отозвать #{i}"
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=btn_label,
+                        callback_data=f"{CB_REVOKE}{inv['token']}",
+                    )
+                ]
+            )
+        return "\n\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    def _create_reply_keyboard(token: str) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📋 Список",
+                        callback_data=CB_LIST,
+                    ),
+                    InlineKeyboardButton(
+                        text="🚫 Отозвать",
+                        callback_data=f"{CB_REVOKE}{token}",
+                    ),
+                ]
+            ]
+        )
 
     @router.message(Command("invite"))
     async def cmd_invite(message: Message, command: CommandObject) -> None:
-        if not _is_admin(message):
+        if not _is_admin_user(message.from_user.id if message.from_user else None):
             await message.answer(ADMIN_DENY)
             return
 
         args = (command.args or "").strip()
-        if not args:
-            await message.answer(
-                "Использование:\n"
-                "/invite create label=Отдел password=код days=7 uses=5\n"
-                "/invite list\n"
-                "/invite revoke <token>"
-            )
-            return
+        if args:
+            parts = args.split(maxsplit=1)
+            sub = parts[0].lower()
+            rest = parts[1] if len(parts) > 1 else ""
 
-        parts = args.split(maxsplit=1)
-        sub = parts[0].lower()
-        rest = parts[1] if len(parts) > 1 else ""
-
-        if sub == "create":
-            params = parse_create_args(rest)
-            label = params.get("label")
-            password = params.get("password")
-            days = int(params["days"]) if params.get("days", "").isdigit() else None
-            uses = int(params["uses"]) if params.get("uses", "").isdigit() else None
-            result = invite_service.create_invite(
-                created_by=message.from_user.id,
-                label=label,
-                password=password,
-                days=days,
-                max_uses=uses,
-            )
-            await message.answer(invite_service.format_create_message(result))
-            return
-
-        if sub == "list":
-            invites = repository.list_active_invites()
-            if not invites:
-                await message.answer("📋 Активных приглашений нет.")
+            if sub == "list":
+                text, markup = _format_invites_list()
+                await message.answer(text, reply_markup=markup)
                 return
-            lines = ["📋 Активные приглашения:"]
-            for i, inv in enumerate(invites, 1):
-                label = inv.get("label") or "—"
-                uses = invite_service.get_invite_uses_label(inv)
-                from src.utils.timefmt import to_msk
 
-                exp_dt = datetime.fromisoformat(inv["expires_at"])
-                exp = to_msk(exp_dt).strftime("%d.%m")
-                token_short = inv["token"][:8] + "…"
-                lines.append(f"{i}. {label} — {uses} — до {exp} — {token_short}")
-            await message.answer("\n".join(lines))
-            return
-
-        if sub == "revoke":
-            token = rest.strip()
-            if not token:
-                await message.answer("Укажите токен: /invite revoke <token>")
+            if sub == "revoke":
+                token = rest.strip()
+                if not token:
+                    await message.answer("Укажите токен или откройте /invites и нажмите «Отозвать».")
+                    return
+                if invite_service.revoke_invite(token):
+                    await message.answer("🚫 Приглашение отозвано.")
+                else:
+                    await message.answer("Приглашение не найдено или уже отозвано.")
                 return
-            if invite_service.revoke_invite(token):
-                await message.answer(f"🚫 Приглашение {token} отозвано.")
-            else:
-                await message.answer("Приглашение не найдено или уже отозвано.")
-            return
 
-        await message.answer("Неизвестная подкоманда. Используйте create, list или revoke.")
+            if sub == "create":
+                args = rest
+            elif sub == "help":
+                await message.answer(
+                    "Создать ссылку: /invite\n"
+                    "С параметрами: /invite label=Отдел password=код days=7 uses=5\n"
+                    "Список: /invites\n"
+                    "Отзыв — кнопкой в /invites"
+                )
+                return
+
+        params = _create_params_from_args(args)
+        result = invite_service.create_invite(
+            created_by=message.from_user.id,
+            **params,
+        )
+        await message.answer(
+            invite_service.format_create_message(result),
+            reply_markup=_create_reply_keyboard(result.token),
+        )
+
+    @router.message(Command("invites"))
+    async def cmd_invites(message: Message) -> None:
+        if not _is_admin_user(message.from_user.id if message.from_user else None):
+            await message.answer(ADMIN_DENY)
+            return
+        text, markup = _format_invites_list()
+        await message.answer(text, reply_markup=markup)
+
+    @router.callback_query(F.data == CB_LIST)
+    async def cb_invite_list(query: CallbackQuery) -> None:
+        if not _is_admin_user(query.from_user.id if query.from_user else None):
+            await query.answer(ADMIN_DENY, show_alert=True)
+            return
+        text, markup = _format_invites_list()
+        await query.message.answer(text, reply_markup=markup)
+        await query.answer()
+
+    @router.callback_query(F.data.startswith(CB_REVOKE))
+    async def cb_invite_revoke(query: CallbackQuery) -> None:
+        if not _is_admin_user(query.from_user.id if query.from_user else None):
+            await query.answer(ADMIN_DENY, show_alert=True)
+            return
+        token = (query.data or "")[len(CB_REVOKE) :]
+        if not token:
+            await query.answer("Токен не найден", show_alert=True)
+            return
+        if invite_service.revoke_invite(token):
+            await query.answer("Отозвано")
+            text, markup = _format_invites_list()
+            try:
+                await query.message.edit_text(text, reply_markup=markup)
+            except Exception:
+                await query.message.answer(f"🚫 Приглашение отозвано.\n\n{text}", reply_markup=markup)
+        else:
+            await query.answer("Уже отозвано или не найдено", show_alert=True)
 
     @router.message(Command("users"))
     async def cmd_users(message: Message) -> None:
-        if not _is_admin(message):
+        if not _is_admin_user(message.from_user.id if message.from_user else None):
             await message.answer(ADMIN_DENY)
             return
 
@@ -119,7 +198,7 @@ def create_admin_router(
 
     @router.message(Command("user"))
     async def cmd_user(message: Message, command: CommandObject) -> None:
-        if not _is_admin(message):
+        if not _is_admin_user(message.from_user.id if message.from_user else None):
             await message.answer(ADMIN_DENY)
             return
 

@@ -15,7 +15,7 @@
 | `TELEGRAM_BOT_TOKEN` | From @BotFather |
 | `OPENROUTER_API_KEY` | From openrouter.ai |
 | `ALLOWED_USER_IDS` | Comma-separated Telegram user IDs |
-| `ADMIN_USER_IDS` | Admin IDs for `/reindex`, `/invite`, `/users` |
+| `ADMIN_USER_IDS` | Admin IDs for `/reindex`, `/invite`, `/invites`, `/users` |
 | `BOT_USERNAME` | Bot @handle for invite links (optional; auto from getMe) |
 | `ADMIN_NOTIFY_CHAT_ID` | Chat for new user registration alerts |
 | `INVITE_DEFAULT_DAYS` | Invite expiry (default 7) |

@@ -233,5 +233,5 @@ class InviteService:
         ]
         if result.password_plain:
             lines.append(f"Пароль: {result.password_plain}")
-        lines.append("Актуальный счётчик: /invite list")
+        lines.append("Список и отзыв: /invites")
         return "\n".join(lines)

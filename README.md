@@ -48,8 +48,8 @@ python -m src.cli bot run
 - `/help` — справка
 - `/limit` — остаток запросов на сегодня
 - `/reindex` — переиндексация (только admin)
-- `/invite create label=... password=... days=7 uses=5` — создать приглашение (admin)
-- `/invite list`, `/invite revoke <token>` — управление invite (admin)
+- `/invite` — создать приглашение (admin); опционально `label=... password=... days=7 uses=5`
+- `/invites` — список приглашений с кнопками отзыва (admin)
 - `/users`, `/user <id>`, `/user block|unblock <id>` — пользователи (admin)
 - `/stats` — статистика (admin): `/stats week`, `/stats month`
 - `/report` — сводка (admin): `/report daily`, `/report weekly --numeric`
