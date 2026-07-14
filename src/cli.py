@@ -82,6 +82,48 @@ def cmd_knowledge_status(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sync_bossfree(args: argparse.Namespace) -> int:
+    from src.integrations.bossfree.client import BossFreeAuthError
+    from src.integrations.bossfree.sync import sync_bossfree
+
+    settings = get_settings()
+    try:
+        report = sync_bossfree(
+            settings,
+            force=bool(getattr(args, "force", False)),
+            dry_run=bool(getattr(args, "dry_run", False)),
+        )
+    except BossFreeAuthError as exc:
+        print(str(exc), file=sys.stderr)
+        print(
+            json.dumps(
+                {
+                    "status": "error",
+                    "fetched": 0,
+                    "written": 0,
+                    "skipped_unchanged": 0,
+                    "skipped_empty": 0,
+                    "errors": [{"slug": "", "message": str(exc)}],
+                    "knowledge_dir": str(settings.knowledge_dir / "bossfree"),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 1
+
+    print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+    if report.status == "error":
+        return 2
+    if (
+        report.written == 0
+        and report.skipped_unchanged == 0
+        and report.skipped_empty == 0
+        and report.errors
+    ):
+        return 2
+    return 0
+
+
 async def cmd_report_async(args: argparse.Namespace) -> int:
     settings = get_settings()
     repository = Repository(settings.sqlite_path)
@@ -216,6 +258,15 @@ def main() -> None:
     reindex = knowledge_sub.add_parser("reindex", help="Reindex knowledge base")
     reindex.add_argument("--force", action="store_true")
     knowledge_sub.add_parser("status", help="Indexing status")
+    sync_bf = knowledge_sub.add_parser(
+        "sync-bossfree", help="Sync articles from Boss Free into knowledge/bossfree"
+    )
+    sync_bf.add_argument(
+        "--force", action="store_true", help="Rewrite all articles ignoring updated_at"
+    )
+    sync_bf.add_argument(
+        "--dry-run", action="store_true", help="Fetch/count without writing files"
+    )
 
     report = sub.add_parser("report", help="Generate analytics report")
     report.add_argument("--period", choices=["daily", "weekly"], default="daily")
@@ -249,6 +300,8 @@ def main() -> None:
         sys.exit(asyncio.run(cmd_reindex_async(args)))
     if args.command == "knowledge" and args.knowledge_command == "status":
         sys.exit(cmd_knowledge_status(args))
+    if args.command == "knowledge" and args.knowledge_command == "sync-bossfree":
+        sys.exit(cmd_sync_bossfree(args))
     if args.command == "report":
         sys.exit(asyncio.run(cmd_report_async(args)))
     if args.command == "stats":

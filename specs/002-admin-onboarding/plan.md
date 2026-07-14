@@ -149,4 +149,4 @@ tests/
 | Data model | `specs/002-admin-onboarding/data-model.md` | ✅ |
 | Contracts | `specs/002-admin-onboarding/contracts/telegram-bot.md` | ✅ |
 | Quickstart | `specs/002-admin-onboarding/quickstart.md` | ✅ |
-| Tasks | `specs/002-admin-onboarding/tasks.md` | ⏳ (/speckit-tasks) |
+| Tasks | `specs/002-admin-onboarding/tasks.md` | ✅ (implemented) |

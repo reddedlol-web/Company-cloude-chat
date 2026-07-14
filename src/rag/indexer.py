@@ -56,12 +56,40 @@ class KnowledgeIndexer:
     def _load_text(self, path: Path) -> str:
         suffix = path.suffix.lower()
         if suffix in {".md", ".txt"}:
-            return path.read_text(encoding="utf-8")
+            raw = path.read_text(encoding="utf-8")
+            if suffix == ".md":
+                return self._strip_yaml_frontmatter(raw)
+            return raw
         if suffix == ".pdf":
             reader = PdfReader(str(path))
             pages = [page.extract_text() or "" for page in reader.pages]
             return "\n".join(pages)
         raise ValueError(f"Unsupported format: {suffix}")
+
+    @staticmethod
+    def _strip_yaml_frontmatter(text: str) -> str:
+        if not text.startswith("---"):
+            return text
+        lines = text.splitlines(keepends=True)
+        if not lines or lines[0].strip() != "---":
+            return text
+        for idx in range(1, len(lines)):
+            if lines[idx].strip() == "---":
+                return "".join(lines[idx + 1 :])
+        return text
+
+    @staticmethod
+    def _title_from_markdown(text: str, fallback: str) -> str:
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("# "):
+                title = stripped[2:].strip()
+                return title or fallback
+            # First non-empty line is not an H1 → keep filename stem
+            return fallback
+        return fallback
 
     def _discover_files(self) -> list[Path]:
         root = self.settings.knowledge_dir
@@ -110,6 +138,9 @@ class KnowledgeIndexer:
                 text = self._load_text(path).strip()
                 if not text:
                     raise ValueError("Document is empty")
+
+                if path.suffix.lower() == ".md":
+                    title = self._title_from_markdown(text, fallback=path.stem)
 
                 chunks = self.splitter.split_text(text)
                 if not chunks:

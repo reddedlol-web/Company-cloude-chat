@@ -32,7 +32,24 @@ def test_split_telegram_messages_long() -> None:
 
 def test_format_stats_empty(reporter: AnalyticsReporter) -> None:
     msg = reporter.format_stats_message("today")
-    assert "📭" in msg or "Запросы" in msg
+    assert "📭" in msg
+
+
+def test_format_stats_with_data(reporter: AnalyticsReporter) -> None:
+    repo = reporter.repository
+    log_id = repo.log_query(user_id=1, status="success", tokens_input=100, tokens_output=40)
+    repo.record_query_detail(
+        query_log_id=log_id,
+        question_text="test",
+        question_hash="h",
+        category="answered",
+        max_similarity=0.9,
+    )
+    msg = reporter.format_stats_message("today")
+    assert "Статистика за сегодня" in msg
+    assert "Как отвечал бот" in msg
+    assert "success:" not in msg
+    assert "По категориям" not in msg
 
 
 @pytest.mark.asyncio

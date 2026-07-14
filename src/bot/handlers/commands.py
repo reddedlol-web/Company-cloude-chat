@@ -19,26 +19,13 @@ def create_commands_router(
 ) -> Router:
     router = Router(name="commands")
 
-    @router.message(Command("start"))
-    async def cmd_start(message: Message, **data) -> None:
-        user_id = message.from_user.id
-        if not settings.is_allowed(user_id):
-            await message.answer("⛔ У вас нет доступа. Обратитесь к администратору.")
-            return
-
-        _, _used, remaining = repository.check_quota(
-            user_id, settings.daily_query_limit
-        )
-        await message.answer(
-            "👋 Привет! Я корпоративный помощник.\n"
-            "Задайте вопрос по регламентам и документам компании.\n"
-            f"Лимит: {remaining}/{settings.daily_query_limit} вопросов сегодня."
-        )
-
     @router.message(Command("help"))
     async def cmd_help(message: Message, **data) -> None:
-        if not settings.is_allowed(message.from_user.id):
-            await message.answer("⛔ У вас нет доступа. Обратитесь к администратору.")
+        if not data.get("is_allowed"):
+            await message.answer(
+                "⛔ У вас нет доступа.\n"
+                "Попросите у администратора ссылку-приглашение или обратитесь в HR."
+            )
             return
         await message.answer(
             "📖 Как пользоваться:\n"
@@ -53,8 +40,11 @@ def create_commands_router(
 
     @router.message(Command("limit"))
     async def cmd_limit(message: Message, **data) -> None:
-        if not settings.is_allowed(message.from_user.id):
-            await message.answer("⛔ У вас нет доступа. Обратитесь к администратору.")
+        if not data.get("is_allowed"):
+            await message.answer(
+                "⛔ У вас нет доступа.\n"
+                "Попросите у администратора ссылку-приглашение или обратитесь в HR."
+            )
             return
         used = repository.get_usage(message.from_user.id)
         remaining = max(0, settings.daily_query_limit - used)

@@ -1,0 +1,45 @@
+// Шаблон конфига для корпоративного пилота (OpenClaw / AutoClaw).
+// Скопируй в ~/.openclaw/openclaw.json и подставь свои значения.
+// Документация: https://docs.openclaw.ai/gateway/configuration
+
+{
+  // Рабочая папка агента — сюда кладём knowledge/, SOUL.md и т.д.
+  agents: {
+    defaults: {
+      workspace: "./workspace",
+    },
+  },
+
+  // Модель: BYO API key (OpenRouter — удобно для пилота, дешёвые модели)
+  agent: {
+    model: "openrouter/google/gemini-2.0-flash-001",
+  },
+
+  channels: {
+    telegram: {
+      enabled: true,
+      // Токен из @BotFather — лучше через env (см. .env.example)
+      botToken: "env:TELEGRAM_BOT_TOKEN",
+
+      // Личные сообщения: только одобренные Telegram ID
+      dmPolicy: "allowlist",
+      allowFrom: [
+        // "123456789",  // админ / тестер 1
+        // "987654321",  // тестер 2
+      ],
+
+      // Группы: бот отвечает только в разрешённых чатах
+      groupPolicy: "allowlist",
+      groups: {
+        // ID корпоративной группы (отрицательное число, начинается с -100)
+        // "-1001234567890": {
+        //   requireMention: true,  // нужно @упомянуть бота
+        //   allowFrom: ["123456789", "987654321"],  // кто может писать в группе
+        // },
+      },
+
+      // Глобально для всех групп (если не переопределено выше)
+      // groups: { "*": { requireMention: true } },
+    },
+  },
+}

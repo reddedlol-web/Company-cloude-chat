@@ -27,9 +27,9 @@ description: "Task list for admin analytics feature implementation"
 
 **Purpose**: Зависимости и структура модуля аналитики
 
-- [ ] T001 Add APScheduler dependency in pyproject.toml
-- [ ] T002 [P] Create analytics package scaffold in src/analytics/__init__.py
-- [ ] T003 [P] Add ANALYTICS_* and ANOMALY_* variables to .env.example
+- [x] T001 Add APScheduler dependency in pyproject.toml
+- [x] T002 [P] Create analytics package scaffold in src/analytics/__init__.py
+- [x] T003 [P] Add ANALYTICS_* and ANOMALY_* variables to .env.example
 
 ---
 
@@ -39,12 +39,12 @@ description: "Task list for admin analytics feature implementation"
 
 **⚠️ CRITICAL**: User story work не начинается до завершения этой фазы
 
-- [ ] T004 Add analytics tables SQL (query_details, daily_stats, analytics_reports, anomaly_flags) in src/db/models.py
-- [ ] T005 Add analytics CRUD and query methods in src/db/repository.py (record_query_detail, get_period_stats, save_report, etc.)
-- [ ] T006 Add AnalyticsConfig settings fields in src/config.py per data-model.md
-- [ ] T007 Implement query category classifier in src/analytics/classifier.py (answered, no_answer, off_topic, error, rate_limited, unauthorized)
-- [ ] T008 Extend log_query flow to persist query_details in src/bot/handlers/messages.py (question_text truncated, category, max_similarity from retriever)
-- [ ] T009 Implement daily/period aggregation roll-up in src/analytics/aggregator.py (compute_daily_stats, get_stats_for_period)
+- [x] T004 Add analytics tables SQL (query_details, daily_stats, analytics_reports, anomaly_flags) in src/db/models.py
+- [x] T005 Add analytics CRUD and query methods in src/db/repository.py (record_query_detail, get_period_stats, save_report, etc.)
+- [x] T006 Add AnalyticsConfig settings fields in src/config.py per data-model.md
+- [x] T007 Implement query category classifier in src/analytics/classifier.py (answered, no_answer, off_topic, error, rate_limited, unauthorized)
+- [x] T008 Extend log_query flow to persist query_details in src/bot/handlers/messages.py (question_text truncated, category, max_similarity from retriever)
+- [x] T009 Implement daily/period aggregation roll-up in src/analytics/aggregator.py (compute_daily_stats, get_stats_for_period)
 
 **Checkpoint**: Foundation ready — метрики пишутся, агрегаты считаются
 
@@ -58,14 +58,14 @@ description: "Task list for admin analytics feature implementation"
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement numeric + LLM summary report builder in src/analytics/reporter.py (format_report, llm_topic_clustering, split_telegram_messages)
-- [ ] T011 [US1] Implement report persistence and idempotency in src/analytics/reporter.py using src/db/repository.py (analytics_reports)
-- [ ] T012 [US1] Implement Telegram report delivery in src/analytics/delivery.py (ANALYTICS_REPORT_CHAT_ID → ADMIN_NOTIFY_CHAT_ID → ADMIN_USER_IDS fallback)
-- [ ] T013 [US1] Create admin analytics router with /report command in src/bot/handlers/analytics.py
-- [ ] T014 [US1] Register analytics router and admin guard in src/bot/main.py
-- [ ] T015 [US1] Implement APScheduler jobs for daily/weekly reports in src/analytics/scheduler.py
-- [ ] T016 [US1] Wire scheduler startup/shutdown in src/bot/main.py when ANALYTICS_SCHEDULE_ENABLED=true
-- [ ] T017 [US1] Add `report` CLI subcommand in src/cli.py per contracts/cli.md (--period, --numeric, --force, --dry-run)
+- [x] T010 [US1] Implement numeric + LLM summary report builder in src/analytics/reporter.py (format_report, llm_topic_clustering, split_telegram_messages)
+- [x] T011 [US1] Implement report persistence and idempotency in src/analytics/reporter.py using src/db/repository.py (analytics_reports)
+- [x] T012 [US1] Implement Telegram report delivery in src/analytics/delivery.py (ANALYTICS_REPORT_CHAT_ID → ADMIN_NOTIFY_CHAT_ID → ADMIN_USER_IDS fallback)
+- [x] T013 [US1] Create admin analytics router with /report command in src/bot/handlers/analytics.py
+- [x] T014 [US1] Register analytics router and admin guard in src/bot/main.py
+- [x] T015 [US1] Implement APScheduler jobs for daily/weekly reports in src/analytics/scheduler.py
+- [x] T016 [US1] Wire scheduler startup/shutdown in src/bot/main.py when ANALYTICS_SCHEDULE_ENABLED=true
+- [x] T017 [US1] Add `report` CLI subcommand in src/cli.py per contracts/cli.md (--period, --numeric, --force, --dry-run)
 
 **Checkpoint**: `/report daily` и автосводка работают независимо от /stats
 
@@ -79,10 +79,10 @@ description: "Task list for admin analytics feature implementation"
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Implement stats formatter with period comparison in src/analytics/reporter.py (format_stats_message)
-- [ ] T019 [US2] Add /stats handler with today|week|month parsing in src/bot/handlers/analytics.py
-- [ ] T020 [US2] Add `stats` CLI subcommand with --json output in src/cli.py
-- [ ] T021 [P] [US2] Add unit tests for aggregator period queries in tests/unit/test_analytics_aggregator.py
+- [x] T018 [US2] Implement stats formatter with period comparison in src/analytics/reporter.py (format_stats_message)
+- [x] T019 [US2] Add /stats handler with today|week|month parsing in src/bot/handlers/analytics.py
+- [x] T020 [US2] Add `stats` CLI subcommand with --json output in src/cli.py
+- [x] T021 [P] [US2] Add unit tests for aggregator period queries in tests/unit/test_analytics_aggregator.py
 
 **Checkpoint**: `/stats` и `/stats week` работают; не-админ получает отказ
 
@@ -96,10 +96,10 @@ description: "Task list for admin analytics feature implementation"
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Implement rule-based anomaly detection in src/analytics/anomalies.py (detect_anomalies, AnomalyFlag dataclass)
-- [ ] T023 [US3] Persist anomaly_flags and embed in report in src/analytics/reporter.py
-- [ ] T024 [US3] Show anomaly warnings in /stats and /report output in src/bot/handlers/analytics.py
-- [ ] T025 [P] [US3] Add unit tests for anomaly thresholds in tests/unit/test_analytics_anomalies.py
+- [x] T022 [US3] Implement rule-based anomaly detection in src/analytics/anomalies.py (detect_anomalies, AnomalyFlag dataclass)
+- [x] T023 [US3] Persist anomaly_flags and embed in report in src/analytics/reporter.py
+- [x] T024 [US3] Show anomaly warnings in /stats and /report output in src/bot/handlers/analytics.py
+- [x] T025 [P] [US3] Add unit tests for anomaly thresholds in tests/unit/test_analytics_anomalies.py
 
 **Checkpoint**: Аномалии видны в сводке и on-demand статистике
 
@@ -113,9 +113,9 @@ description: "Task list for admin analytics feature implementation"
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Add per-user analytics queries in src/db/repository.py (get_user_stats, get_recent_questions)
-- [ ] T027 [US4] Implement user stats card formatter in src/analytics/reporter.py (format_userstats_message)
-- [ ] T028 [US4] Add /userstats handler in src/bot/handlers/analytics.py
+- [x] T026 [US4] Add per-user analytics queries in src/db/repository.py (get_user_stats, get_recent_questions)
+- [x] T027 [US4] Implement user stats card formatter in src/analytics/reporter.py (format_userstats_message)
+- [x] T028 [US4] Add /userstats handler in src/bot/handlers/analytics.py
 
 **Checkpoint**: `/userstats <id>` работает; при ANALYTICS_STORE_QUESTIONS=false скрыты тексты вопросов
 
@@ -129,9 +129,9 @@ description: "Task list for admin analytics feature implementation"
 
 ### Implementation for User Story 5
 
-- [ ] T029 [P] [US5] Add optional fastapi and uvicorn dependencies in pyproject.toml
-- [ ] T030 [US5] Implement read-only dashboard app in src/dashboard/app.py (token auth, 30d daily_stats, Chart.js CDN)
-- [ ] T031 [US5] Start dashboard HTTP server alongside bot in src/bot/main.py when ANALYTICS_DASHBOARD_ENABLED=true
+- [x] T029 [P] [US5] Add optional fastapi and uvicorn dependencies in pyproject.toml
+- [x] T030 [US5] Implement read-only dashboard app in src/dashboard/app.py (token auth, 30d daily_stats, Chart.js CDN)
+- [x] T031 [US5] Start dashboard HTTP server alongside bot in src/bot/main.py when ANALYTICS_DASHBOARD_ENABLED=true
 
 **Checkpoint**: Дашборд опционален; MVP (US1+US2) не зависит от этой фазы
 
@@ -141,12 +141,12 @@ description: "Task list for admin analytics feature implementation"
 
 **Purpose**: CLI maintenance, тесты, документация, retention
 
-- [ ] T032 Add `aggregate` and `purge-analytics` CLI subcommands in src/cli.py
-- [ ] T033 [P] Add integration test for report generation flow in tests/integration/test_analytics_report_flow.py
-- [ ] T034 [P] Add unit tests for report formatting and LLM fallback in tests/unit/test_analytics_reporter.py
-- [ ] T035 Update docs/deploy.md with ANALYTICS_* env vars and scheduler notes
-- [ ] T036 [P] Update README.md with admin analytics commands section
-- [ ] T037 Validate all scenarios in specs/003-admin-analytics/quickstart.md
+- [x] T032 Add `aggregate` and `purge-analytics` CLI subcommands in src/cli.py
+- [x] T033 [P] Add integration test for report generation flow in tests/integration/test_analytics_report_flow.py
+- [x] T034 [P] Add unit tests for report formatting and LLM fallback in tests/unit/test_analytics_reporter.py
+- [x] T035 Update docs/deploy.md with ANALYTICS_* env vars and scheduler notes
+- [x] T036 [P] Update README.md with admin analytics commands section
+- [x] T037 Validate all scenarios in specs/003-admin-analytics/quickstart.md
 
 ---
 

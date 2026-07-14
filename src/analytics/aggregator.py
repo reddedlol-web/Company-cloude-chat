@@ -50,7 +50,7 @@ def resolve_period(kind: PeriodKind) -> PeriodRange:
             kind="today",
             start=_start_of_day(today),
             end=now,
-            label="сегодня, UTC",
+            label="сегодня",
         )
     if kind == "week":
         start_day = today - timedelta(days=6)

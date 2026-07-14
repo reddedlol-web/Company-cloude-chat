@@ -8,6 +8,16 @@ from httpx import HTTPError
 
 from src.analytics.aggregator import AnalyticsAggregator, PeriodRange, resolve_period
 from src.analytics.anomalies import AnomalyDetector
+from src.analytics.formatting import (
+    format_breakdown_lines,
+    format_comparison,
+    format_token_usage,
+    format_top_sources,
+    format_users_questions,
+    merge_breakdown,
+    pct,
+    period_title,
+)
 from src.config import Settings
 from src.db.repository import Repository
 from src.llm.openrouter import OpenRouterClient
@@ -67,7 +77,7 @@ class AnalyticsReporter:
                 period_start=period.start_date,
                 period_end=period.end_date,
                 summary_text=text,
-                stats_snapshot=stats,
+                stats_snapshot=self._stats_snapshot(stats),
                 delivery_status="skipped_empty",
             )
             return ReportResult([text], report_id, 0, True)
@@ -79,7 +89,7 @@ class AnalyticsReporter:
                 period_start=period.start_date,
                 period_end=period.end_date,
                 summary_text=text,
-                stats_snapshot=stats,
+                stats_snapshot=self._stats_snapshot(stats),
                 delivery_status="pending",
             )
             return ReportResult(split_telegram_messages(text), report_id, 0, True)
@@ -111,7 +121,7 @@ class AnalyticsReporter:
             period_start=period.start_date,
             period_end=period.end_date,
             summary_text=body,
-            stats_snapshot=stats,
+            stats_snapshot=self._stats_snapshot(stats),
             anomalies=anomaly_dicts,
             llm_tokens_used=llm_tokens,
             delivery_status="pending",
@@ -177,25 +187,29 @@ class AnalyticsReporter:
         if period_stats["total_queries"] == 0 and today_stats["total_queries"] == 0:
             return "Активности нет за выбранный период."
 
-        by_status = period_stats["by_status"]
-        status_line = " ".join(
-            f"{'✅' if s == 'success' else '❓' if s == 'no_answer' else '🚫' if s == 'rate_limited' else '⚠️'}{by_status[s]}"
-            for s in sorted(by_status)
+        period_merged = merge_breakdown(period_stats["by_status"], {})
+        breakdown = format_breakdown_lines(
+            period_merged, max(period_stats["total_queries"], 1)
         )
-        top = period_stats["top_sources"]
-        top_line = "\n".join(f"• {t} ({c})" for t, c in top) if top else "—"
+        top_lines = format_top_sources(
+            [{"title": t, "count": c} for t, c in period_stats["top_sources"]]
+        )
+        today_tok = today_stats["tokens_input"] + today_stats["tokens_output"]
+        period_tok = period_stats["tokens_input"] + period_stats["tokens_output"]
 
         lines = [
-            f"👤 Пользователь {user_id}",
+            f"👤 Сотрудник {user_id}",
             "",
-            f"Сегодня: {today_stats['total_queries']} запросов, "
-            f"{today_stats['tokens_input'] + today_stats['tokens_output']} токенов",
-            f"За {period.label}: {period_stats['total_queries']} запросов, "
-            f"{period_stats['tokens_input'] + period_stats['tokens_output']} токенов",
+            f"Сегодня: {today_stats['total_queries']} вопр. · {today_tok:,} токенов".replace(",", " "),
+            f"За {period.label}: {period_stats['total_queries']} вопр. · {period_tok:,} токенов".replace(",", " "),
             "",
-            f"Статусы ({period.label}): {status_line or '—'}",
-            f"Топ источников:\n{top_line}",
+            "Как отвечал бот:",
+            *breakdown,
         ]
+
+        if top_lines:
+            lines.append("")
+            lines.extend(top_lines)
 
         if self.settings.analytics_store_questions:
             recent = self.repository.get_recent_questions(user_id, limit=5)
@@ -215,40 +229,28 @@ class AnalyticsReporter:
     ) -> str:
         period: PeriodRange = stats["period"]
         total = stats["total_queries"]
-        by_status = stats["by_status"]
-        success = by_status.get("success", 0)
-        no_answer = by_status.get("no_answer", 0)
-        rate_limited = by_status.get("rate_limited", 0)
-        errors = by_status.get("error", 0)
+        merged = merge_breakdown(stats["by_status"], stats.get("by_category", {}))
 
         cmp_q = stats.get("comparison", {}).get("queries")
         cmp_suffix = f" ({cmp_q} к прошлому периоду)" if cmp_q else ""
 
         lines = [
-            f"📊 Сводка за {period.label}",
+            f"📊 Сводка {period_title(period.label)}",
             "",
-            f"Запросы: {total}{cmp_suffix}",
-            f"Пользователи: {stats['unique_users']} активных",
-            f"Токены: {stats['tokens_input']:,} in / {stats['tokens_output']:,} out",
+            format_users_questions(stats["unique_users"], total) + cmp_suffix,
+            format_token_usage(stats["tokens_input"], stats["tokens_output"]),
             "",
-            "Статусы:",
-            f"✅ Ответ из базы: {success} ({self._pct(success, total)})",
-            f"❓ Нет в базе: {no_answer} ({self._pct(no_answer, total)})",
-            f"🚫 Лимит: {rate_limited} | ⚠️ Ошибки: {errors}",
+            "Как отвечал бот:",
+            *format_breakdown_lines(merged, total),
         ]
 
-        by_cat = stats.get("by_category", {})
-        if by_cat.get("off_topic"):
-            lines.append(f"💬 Оффтоп: {by_cat['off_topic']}")
-
-        top = stats.get("top_sources", [])[:5]
-        if top:
-            lines.append("\nТоп источников:")
-            for item in top:
-                lines.append(f"• {item['title']} — {item['count']}")
+        top_lines = format_top_sources(stats.get("top_sources", []), limit=5)
+        if top_lines:
+            lines.append("")
+            lines.extend(top_lines)
 
         if anomalies:
-            lines.append("\n⚠️ Внимание:")
+            lines.append("\n⚠️ На что обратить внимание:")
             for a in anomalies[:5]:
                 lines.append(f"• {a.description}")
 
@@ -257,49 +259,33 @@ class AnalyticsReporter:
     def _format_stats(self, stats: dict[str, Any], anomalies: list) -> str:
         period: PeriodRange = stats["period"]
         total = stats["total_queries"]
-        by_status = stats["by_status"]
-        success = by_status.get("success", 0)
-        no_answer = by_status.get("no_answer", 0)
+        merged = merge_breakdown(stats["by_status"], stats.get("by_category", {}))
 
         lines = [
-            f"📈 Статистика ({period.label})",
+            f"📈 Статистика {period_title(period.label)}",
             "",
-            f"Запросы: {total}",
-            f"Активных пользователей: {stats['unique_users']}",
-            f"Токены: {stats['tokens_input']:,} in / {stats['tokens_output']:,} out",
+            format_users_questions(stats["unique_users"], total),
+            format_token_usage(stats["tokens_input"], stats["tokens_output"]),
             "",
-            "По статусам:",
+            "Как отвечал бот:",
+            *format_breakdown_lines(merged, total),
         ]
-        for status, cnt in sorted(by_status.items()):
-            pct = self._pct(cnt, total)
-            icon = {"success": "✅", "no_answer": "❓", "rate_limited": "🚫", "error": "⚠️"}.get(
-                status, "•"
-            )
-            lines.append(f"{icon} {status}: {cnt} ({pct})")
 
-        by_cat = stats.get("by_category", {})
-        if by_cat:
-            cat_line = " | ".join(f"{k}: {v}" for k, v in sorted(by_cat.items()))
-            lines.append(f"\nПо категориям:\n{cat_line}")
+        top_lines = format_top_sources(stats.get("top_sources", []), limit=5)
+        if top_lines:
+            lines.append("")
+            lines.extend(top_lines)
 
-        top = stats.get("top_sources", [])[:3]
-        if top:
-            lines.append("\nТоп источников:")
-            for item in top:
-                lines.append(f"• {item['title']} — {item['count']}")
-
-        cmp_q = stats.get("comparison", {}).get("queries")
-        cmp_t = stats.get("comparison", {}).get("tokens")
-        if cmp_q or cmp_t:
-            parts = []
-            if cmp_q:
-                parts.append(f"запросы {cmp_q}")
-            if cmp_t:
-                parts.append(f"токены {cmp_t}")
-            lines.append(f"\nСравнение с прошлым периодом: {', '.join(parts)}")
+        cmp_line = format_comparison(
+            stats.get("comparison", {}).get("queries"),
+            stats.get("comparison", {}).get("tokens"),
+        )
+        if cmp_line:
+            lines.append("")
+            lines.append(cmp_line)
 
         if anomalies:
-            lines.append("\n⚠️ Внимание:")
+            lines.append("\n⚠️ На что обратить внимание:")
             for a in anomalies[:3]:
                 lines.append(f"• {a.description}")
 
@@ -307,9 +293,20 @@ class AnalyticsReporter:
 
     @staticmethod
     def _pct(part: int, total: int) -> str:
-        if total == 0:
-            return "0%"
-        return f"{part * 100 // total}%"
+        return pct(part, total)
+
+    @staticmethod
+    def _stats_snapshot(stats: dict[str, Any]) -> dict[str, Any]:
+        snapshot = dict(stats)
+        period = snapshot.pop("period", None)
+        if period is not None:
+            snapshot["period"] = {
+                "kind": period.kind,
+                "start": period.start.isoformat(),
+                "end": period.end.isoformat(),
+                "label": period.label,
+            }
+        return snapshot
 
 
 def split_telegram_messages(text: str, limit: int = 4096) -> list[str]:

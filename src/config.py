@@ -64,6 +64,20 @@ class Settings(BaseSettings):
     )
     analytics_dashboard_port: int = Field(default=8080, alias="ANALYTICS_DASHBOARD_PORT")
 
+    bot_username: str | None = Field(default=None, alias="BOT_USERNAME")
+    invite_default_days: int = Field(default=7, alias="INVITE_DEFAULT_DAYS")
+    invite_default_max_uses: int = Field(default=1, alias="INVITE_DEFAULT_MAX_USES")
+
+    # Boss Free sync (004) — optional for bot runtime; required by sync CLI
+    bossfree_email: str | None = Field(default=None, alias="BOSSFREE_EMAIL")
+    bossfree_password: str | None = Field(default=None, alias="BOSSFREE_PASSWORD")
+    bossfree_base_url: str = Field(
+        default="https://topix.bossfree.pro/api", alias="BOSSFREE_BASE_URL"
+    )
+    bossfree_origin: str = Field(
+        default="https://topix.bossfree.pro", alias="BOSSFREE_ORIGIN"
+    )
+
     chunk_size: int = 512
     chunk_overlap: int = 64
 

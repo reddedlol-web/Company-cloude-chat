@@ -4,13 +4,18 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, TelegramObject
 
 from src.config import Settings
+from src.db.repository import Repository
 
-UNAUTHORIZED_MSG = "⛔ У вас нет доступа к этому боту."
+UNAUTHORIZED_MSG = (
+    "⛔ У вас нет доступа к этому боту.\n"
+    "Попросите у администратора ссылку-приглашение."
+)
 
 
 class AuthMiddleware(BaseMiddleware):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, repository: Repository) -> None:
         self.settings = settings
+        self.repository = repository
 
     async def __call__(
         self,
@@ -23,7 +28,9 @@ class AuthMiddleware(BaseMiddleware):
 
         user_id = event.from_user.id
         data["user_id"] = user_id
-        data["is_allowed"] = self.settings.is_allowed(user_id)
+        data["is_allowed"] = self.settings.is_allowed(user_id) or (
+            self.repository.is_registered_active(user_id)
+        )
         data["is_admin"] = self.settings.is_admin(user_id)
         return await handler(event, data)
 

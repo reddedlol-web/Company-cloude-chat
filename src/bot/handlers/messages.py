@@ -89,8 +89,7 @@ def create_messages_router(
 
         started = time.perf_counter()
         try:
-            chunks = await retriever.retrieve(question)
-            max_similarity = KnowledgeRetriever.max_similarity(chunks)
+            chunks, max_similarity = await retriever.retrieve(question)
             if not chunks:
                 await message.answer(NO_ANSWER_MSG)
                 log_id = repository.log_query(

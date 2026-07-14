@@ -534,3 +534,301 @@ class Repository:
                 (cutoff_iso,),
             )
             return int(cursor.rowcount)
+
+    # --- Onboarding (002) ---
+
+    def create_invite(
+        self,
+        *,
+        invite_id: str,
+        token: str,
+        password_hash: str | None,
+        label: str | None,
+        created_by: int,
+        max_uses: int,
+        expires_at: str,
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO invites (
+                    id, token, password_hash, label, created_by,
+                    max_uses, use_count, expires_at, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'active', ?)
+                """,
+                (
+                    invite_id,
+                    token,
+                    password_hash,
+                    label,
+                    created_by,
+                    max_uses,
+                    expires_at,
+                    now,
+                ),
+            )
+
+    def get_invite_by_token(self, token: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM invites WHERE token = ?", (token,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_active_invites(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM invites
+                WHERE status = 'active'
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_invite_status(self, invite_id: str, status: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE invites SET status = ? WHERE id = ?",
+                (status, invite_id),
+            )
+
+    def revoke_invite_by_token(self, token: str) -> bool:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                "UPDATE invites SET status = 'revoked' WHERE token = ? AND status = 'active'",
+                (token,),
+            )
+            return cursor.rowcount > 0
+
+    def increment_invite_use_count(self, invite_id: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE invites SET use_count = use_count + 1 WHERE id = ?",
+                (invite_id,),
+            )
+
+    def count_invite_redemptions(self, invite_id: str) -> int:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM invite_redemptions WHERE invite_id = ?",
+                (invite_id,),
+            ).fetchone()
+        return int(row["cnt"]) if row else 0
+
+    def sync_invite_use_count(self, invite_id: str, use_count: int) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE invites SET use_count = ? WHERE id = ?",
+                (use_count, invite_id),
+            )
+
+    def record_invite_redemption(self, invite_id: str, user_id: int) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO invite_redemptions (
+                    invite_id, telegram_user_id, redeemed_at
+                ) VALUES (?, ?, ?)
+                """,
+                (invite_id, user_id, now),
+            )
+
+    def is_registered_active(self, user_id: int) -> bool:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM registered_users
+                WHERE telegram_user_id = ? AND is_active = 1 AND blocked_at IS NULL
+                """,
+                (user_id,),
+            ).fetchone()
+        return row is not None
+
+    def is_user_blocked(self, user_id: int) -> bool:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM registered_users
+                WHERE telegram_user_id = ? AND (is_active = 0 OR blocked_at IS NOT NULL)
+                """,
+                (user_id,),
+            ).fetchone()
+        return row is not None
+
+    def register_user(
+        self,
+        *,
+        telegram_user_id: int,
+        username: str | None,
+        display_name: str,
+        invite_id: str,
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO registered_users (
+                    telegram_user_id, username, display_name, invite_id,
+                    registered_at, is_active
+                ) VALUES (?, ?, ?, ?, ?, 1)
+                ON CONFLICT(telegram_user_id) DO UPDATE SET
+                    username=excluded.username,
+                    display_name=excluded.display_name,
+                    invite_id=excluded.invite_id,
+                    is_active=1,
+                    blocked_at=NULL,
+                    blocked_by=NULL
+                """,
+                (telegram_user_id, username, display_name, invite_id, now),
+            )
+
+    def list_registered_users(self, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT ru.*, i.label AS invite_label
+                FROM registered_users ru
+                LEFT JOIN invites i ON i.id = ru.invite_id
+                ORDER BY ru.registered_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def count_registered_users(self) -> int:
+        with self.connect() as conn:
+            row = conn.execute("SELECT COUNT(*) AS cnt FROM registered_users").fetchone()
+        return int(row["cnt"]) if row else 0
+
+    def get_registered_user(self, user_id: int) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT ru.*, i.label AS invite_label
+                FROM registered_users ru
+                LEFT JOIN invites i ON i.id = ru.invite_id
+                WHERE ru.telegram_user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def block_user(self, user_id: int, blocked_by: int) -> bool:
+        now = datetime.now(UTC).isoformat()
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE registered_users
+                SET is_active = 0, blocked_at = ?, blocked_by = ?
+                WHERE telegram_user_id = ?
+                """,
+                (now, blocked_by, user_id),
+            )
+            return cursor.rowcount > 0
+
+    def unblock_user(self, user_id: int) -> bool:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE registered_users
+                SET is_active = 1, blocked_at = NULL, blocked_by = NULL
+                WHERE telegram_user_id = ?
+                """,
+                (user_id,),
+            )
+            return cursor.rowcount > 0
+
+    def count_user_queries(self, user_id: int) -> int:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM query_logs WHERE telegram_user_id = ?",
+                (user_id,),
+            ).fetchone()
+        return int(row["cnt"]) if row else 0
+
+    def get_last_query_time(self, user_id: int) -> str | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT timestamp FROM query_logs
+                WHERE telegram_user_id = ?
+                ORDER BY timestamp DESC LIMIT 1
+                """,
+                (user_id,),
+            ).fetchone()
+        return row["timestamp"] if row else None
+
+    def get_password_attempts(
+        self, user_id: int, invite_id: str
+    ) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM password_attempts
+                WHERE telegram_user_id = ? AND invite_id = ?
+                """,
+                (user_id, invite_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def record_password_attempt(self, user_id: int, invite_id: str) -> int:
+        limit = 3
+        now = datetime.now(UTC).isoformat()
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT attempt_count, window_start FROM password_attempts
+                WHERE telegram_user_id = ? AND invite_id = ?
+                """,
+                (user_id, invite_id),
+            ).fetchone()
+            if row is None:
+                conn.execute(
+                    """
+                    INSERT INTO password_attempts (
+                        telegram_user_id, invite_id, attempt_count, window_start
+                    ) VALUES (?, ?, 1, ?)
+                    """,
+                    (user_id, invite_id, now),
+                )
+                return limit - 1
+
+            window_start = datetime.fromisoformat(row["window_start"])
+            if window_start.tzinfo is None:
+                window_start = window_start.replace(tzinfo=UTC)
+            if datetime.now(UTC) - window_start > timedelta(minutes=15):
+                conn.execute(
+                    """
+                    UPDATE password_attempts
+                    SET attempt_count = 1, window_start = ?
+                    WHERE telegram_user_id = ? AND invite_id = ?
+                    """,
+                    (now, user_id, invite_id),
+                )
+                return limit - 1
+
+            new_count = int(row["attempt_count"]) + 1
+            conn.execute(
+                """
+                UPDATE password_attempts SET attempt_count = ?
+                WHERE telegram_user_id = ? AND invite_id = ?
+                """,
+                (new_count, user_id, invite_id),
+            )
+            return max(0, limit - new_count)
+
+    def reset_password_attempts(self, user_id: int, invite_id: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                DELETE FROM password_attempts
+                WHERE telegram_user_id = ? AND invite_id = ?
+                """,
+                (user_id, invite_id),
+            )

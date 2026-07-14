@@ -85,4 +85,48 @@ CREATE TABLE IF NOT EXISTS anomaly_flags (
 
 CREATE INDEX IF NOT EXISTS idx_anomaly_date_user
     ON anomaly_flags (stats_date, telegram_user_id);
+
+CREATE TABLE IF NOT EXISTS invites (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
+    label TEXT,
+    created_by INTEGER NOT NULL,
+    max_uses INTEGER NOT NULL DEFAULT 1,
+    use_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS registered_users (
+    telegram_user_id INTEGER PRIMARY KEY,
+    username TEXT,
+    display_name TEXT,
+    invite_id TEXT REFERENCES invites(id),
+    registered_at TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    blocked_at TEXT,
+    blocked_by INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS invite_redemptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invite_id TEXT NOT NULL REFERENCES invites(id),
+    telegram_user_id INTEGER NOT NULL,
+    redeemed_at TEXT NOT NULL,
+    UNIQUE (invite_id, telegram_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS password_attempts (
+    telegram_user_id INTEGER NOT NULL,
+    invite_id TEXT NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    window_start TEXT NOT NULL,
+    PRIMARY KEY (telegram_user_id, invite_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_invites_token ON invites (token);
+CREATE INDEX IF NOT EXISTS idx_invites_status ON invites (status);
+CREATE INDEX IF NOT EXISTS idx_registered_users_active ON registered_users (is_active);
 """
