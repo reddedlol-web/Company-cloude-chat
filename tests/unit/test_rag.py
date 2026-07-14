@@ -2,7 +2,7 @@ from pathlib import Path
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from src.rag.prompts import build_user_prompt
+from src.rag.prompts import build_user_prompt, format_sources_html
 
 
 def test_build_user_prompt_includes_sources() -> None:
@@ -13,6 +13,36 @@ def test_build_user_prompt_includes_sources() -> None:
     assert "refund-policy" in prompt
     assert "14 days" in prompt
     assert "How long to return?" in prompt
+
+
+def test_build_user_prompt_includes_source_url() -> None:
+    chunks = [
+        {
+            "title": "Наши ценности",
+            "source_url": "https://topix.bossfree.pro/post/nashi-cennosti",
+            "content": "1. Трушность",
+        }
+    ]
+    prompt = build_user_prompt("ценности?", chunks)
+    assert "https://topix.bossfree.pro/post/nashi-cennosti" in prompt
+
+
+def test_format_sources_html_links() -> None:
+    chunks = [
+        {
+            "title": "Наши ценности",
+            "source_url": "https://topix.bossfree.pro/post/nashi-cennosti",
+        },
+        {
+            "title": "Наши ценности",
+            "source_url": "https://topix.bossfree.pro/post/nashi-cennosti",
+        },
+        {"title": "О компании", "source_url": ""},
+    ]
+    line = format_sources_html(chunks)
+    assert 'href="https://topix.bossfree.pro/post/nashi-cennosti"' in line
+    assert ">Наши ценности</a>" in line
+    assert "О компании" in line
 
 
 def test_build_user_prompt_empty_context() -> None:

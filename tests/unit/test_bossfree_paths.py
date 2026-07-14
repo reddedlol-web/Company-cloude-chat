@@ -52,6 +52,8 @@ def test_html_iframe_becomes_link() -> None:
     html = '<iframe src="https://youtube.com/embed/x"></iframe><p>Text enough for threshold here ok.</p>'
     md = html_to_markdown(html)
     assert "youtube.com" in md
+    assert "Видео (YouTube):" in md
+    assert "watch?v=x" in md
     assert plain_text_length(md) >= 20
 
 

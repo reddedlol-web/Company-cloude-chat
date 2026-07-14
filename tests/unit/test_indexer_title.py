@@ -23,6 +23,17 @@ def test_strip_frontmatter_keeps_body() -> None:
     assert "slug" not in stripped
 
 
+def test_parse_frontmatter_source_url() -> None:
+    raw = (
+        "---\n"
+        'source_url: "https://topix.bossfree.pro/post/nashi-cennosti"\n'
+        "---\n\n# Наши ценности\n"
+    )
+    meta, body = KnowledgeIndexer._parse_yaml_frontmatter(raw)
+    assert meta["source_url"] == "https://topix.bossfree.pro/post/nashi-cennosti"
+    assert body.lstrip().startswith("# Наши ценности")
+
+
 def test_discover_nested_bossfree(tmp_path: Path) -> None:
     knowledge = tmp_path / "knowledge"
     nested = knowledge / "bossfree" / "company" / "policies"

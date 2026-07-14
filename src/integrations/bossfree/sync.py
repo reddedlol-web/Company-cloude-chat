@@ -7,7 +7,7 @@ import httpx
 
 from src.config import Settings
 from src.integrations.bossfree.client import BossFreeAuthError, BossFreeClient
-from src.integrations.bossfree.html_to_markdown import html_to_markdown, is_empty_article
+from src.integrations.bossfree.html_to_markdown import html_to_markdown
 from src.integrations.bossfree.models import SyncError, SyncReport
 from src.integrations.bossfree.paths import category_id_paths, relative_md_path
 from src.integrations.bossfree.writer import (
@@ -61,10 +61,9 @@ def sync_bossfree(
                 try:
                     article = client.get_post_by_slug(item.slug)
                     report.fetched += 1
+                    # Keep every post (including video-only / short stubs). Title + body
+                    # go into knowledge so RAG can still cite the category and links.
                     body = html_to_markdown(article.content)
-                    if is_empty_article(body):
-                        report.skipped_empty += 1
-                        continue
 
                     rel = relative_md_path(
                         category_id=article.category_id or item.category_id,

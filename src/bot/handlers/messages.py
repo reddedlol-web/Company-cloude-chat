@@ -1,8 +1,10 @@
 import logging
 import time
+from html import escape
 
 from aiogram import Router
 from aiogram.types import Message
+from aiogram.utils.chat_action import ChatActionSender
 from httpx import HTTPError
 
 from src.analytics.recorder import record_query_detail
@@ -10,7 +12,7 @@ from src.bot.middleware.auth import reply_unauthorized, require_allowed
 from src.config import Settings
 from src.db.repository import Repository
 from src.llm.openrouter import OpenRouterClient
-from src.rag.prompts import SYSTEM_PROMPT, build_user_prompt
+from src.rag.prompts import SYSTEM_PROMPT, build_user_prompt, format_sources_html
 from src.rag.retriever import KnowledgeRetriever
 
 logger = logging.getLogger(__name__)
@@ -89,34 +91,48 @@ def create_messages_router(
 
         started = time.perf_counter()
         try:
-            chunks, max_similarity = await retriever.retrieve(question)
-            if not chunks:
-                await message.answer(NO_ANSWER_MSG)
-                log_id = repository.log_query(
-                    user_id=user_id,
-                    status="no_answer",
-                    question_length=len(question),
-                    latency_ms=int((time.perf_counter() - started) * 1000),
+            async with ChatActionSender.typing(
+                bot=message.bot,
+                chat_id=message.chat.id,
+            ):
+                chunks, max_similarity = await retriever.retrieve(question)
+                if not chunks:
+                    await message.answer(NO_ANSWER_MSG)
+                    log_id = repository.log_query(
+                        user_id=user_id,
+                        status="no_answer",
+                        question_length=len(question),
+                        latency_ms=int((time.perf_counter() - started) * 1000),
+                    )
+                    _log_with_detail(
+                        repository,
+                        settings,
+                        query_log_id=log_id,
+                        question=question,
+                        status="no_answer",
+                        max_similarity=max_similarity,
+                        had_chunks=False,
+                    )
+                    return
+
+                user_prompt = build_user_prompt(question, chunks)
+                result = await llm.chat(
+                    SYSTEM_PROMPT,
+                    user_prompt,
+                    max_tokens=settings.llm_max_tokens,
                 )
-                _log_with_detail(
-                    repository,
-                    settings,
-                    query_log_id=log_id,
-                    question=question,
-                    status="no_answer",
-                    max_similarity=max_similarity,
-                    had_chunks=False,
+
+                sources = sorted(
+                    {
+                        str(chunk["title"])
+                        for chunk in chunks
+                        if chunk.get("title")
+                    }
                 )
-                return
+                # Default parse_mode=HTML: escape model text so "<...>" never breaks Telegram.
+                reply = f"{escape(result.content)}\n\n{format_sources_html(chunks)}"
 
-            user_prompt = build_user_prompt(question, chunks)
-            result = await llm.chat(SYSTEM_PROMPT, user_prompt)
-
-            sources = sorted({str(chunk["title"]) for chunk in chunks})
-            sources_line = ", ".join(sources)
-            reply = f"{result.content}\n\n📎 Источники: {sources_line}"
-
-            await message.answer(reply)
+                await message.answer(reply)
             repository.increment_usage(user_id)
             log_id = repository.log_query(
                 user_id=user_id,

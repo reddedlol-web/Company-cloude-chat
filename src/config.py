@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="openai/gpt-4o-mini", alias="LLM_MODEL")
     embedding_model: str = Field(default="openai/text-embedding-3-small", alias="EMBEDDING_MODEL")
     top_k_chunks: int = Field(default=5, alias="TOP_K_CHUNKS")
+    # After vector hit: pull more chunks from the same source docs so lists
+    # (values, steps, rules) are not truncated mid-way.
+    max_expand_docs: int = Field(default=3, alias="MAX_EXPAND_DOCS")
+    max_context_chunks: int = Field(default=12, alias="MAX_CONTEXT_CHUNKS")
+    llm_max_tokens: int = Field(default=2048, alias="LLM_MAX_TOKENS")
 
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="text", alias="LOG_FORMAT")
@@ -83,8 +88,8 @@ class Settings(BaseSettings):
         default="https://topix.bossfree.pro", alias="BOSSFREE_ORIGIN"
     )
 
-    chunk_size: int = 512
-    chunk_overlap: int = 64
+    chunk_size: int = 1024
+    chunk_overlap: int = 128
 
     @field_validator(
         "allowed_user_ids",

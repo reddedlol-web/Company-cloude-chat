@@ -82,7 +82,9 @@ def test_sync_writes_and_skips_unchanged(settings: Settings, monkeypatch: pytest
     assert report2.skipped_unchanged == 1
 
 
-def test_sync_skips_empty(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sync_writes_short_and_media_only(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     empty = BossFreeArticleFull(
         id=2,
         title="Empty",
@@ -120,8 +122,10 @@ def test_sync_skips_empty(settings: Settings, monkeypatch: pytest.MonkeyPatch) -
     )
 
     report = sync_bossfree(settings)
-    assert report.skipped_empty == 1
-    assert report.written == 1
+    assert report.skipped_empty == 0
+    assert report.written == 2
+    files = list((settings.knowledge_dir / "bossfree").rglob("*.md"))
+    assert {f.stem for f in files} == {"empty", "good"}
 
 
 def test_sync_missing_credentials(tmp_path: Path) -> None:

@@ -58,7 +58,8 @@ class KnowledgeIndexer:
         if suffix in {".md", ".txt"}:
             raw = path.read_text(encoding="utf-8")
             if suffix == ".md":
-                return self._strip_yaml_frontmatter(raw)
+                _, body = self._parse_yaml_frontmatter(raw)
+                return body
             return raw
         if suffix == ".pdf":
             reader = PdfReader(str(path))
@@ -67,16 +68,33 @@ class KnowledgeIndexer:
         raise ValueError(f"Unsupported format: {suffix}")
 
     @staticmethod
-    def _strip_yaml_frontmatter(text: str) -> str:
+    def _parse_yaml_frontmatter(text: str) -> tuple[dict[str, str], str]:
+        """Return (frontmatter fields, body). Body has frontmatter stripped."""
         if not text.startswith("---"):
-            return text
+            return {}, text
         lines = text.splitlines(keepends=True)
         if not lines or lines[0].strip() != "---":
-            return text
+            return {}, text
         for idx in range(1, len(lines)):
             if lines[idx].strip() == "---":
-                return "".join(lines[idx + 1 :])
-        return text
+                meta_block = "".join(lines[1:idx])
+                body = "".join(lines[idx + 1 :])
+                fields: dict[str, str] = {}
+                for raw_line in meta_block.splitlines():
+                    if ":" not in raw_line:
+                        continue
+                    key, value = raw_line.split(":", 1)
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key:
+                        fields[key] = value
+                return fields, body
+        return {}, text
+
+    @staticmethod
+    def _strip_yaml_frontmatter(text: str) -> str:
+        _, body = KnowledgeIndexer._parse_yaml_frontmatter(text)
+        return body
 
     @staticmethod
     def _title_from_markdown(text: str, fallback: str) -> str:
@@ -86,6 +104,8 @@ class KnowledgeIndexer:
                 continue
             if stripped.startswith("# "):
                 title = stripped[2:].strip()
+                # Strip markdown bold markers often left from HTML conversion
+                title = title.replace("**", "").strip()
                 return title or fallback
             # First non-empty line is not an H1 → keep filename stem
             return fallback
@@ -118,6 +138,7 @@ class KnowledgeIndexer:
             seen_paths.add(rel_path)
             doc_id = self._doc_id(rel_path)
             title = path.stem
+            source_url = ""
 
             try:
                 file_hash = self._file_hash(path)
@@ -135,7 +156,14 @@ class KnowledgeIndexer:
                     documents_indexed += 1
                     continue
 
-                text = self._load_text(path).strip()
+                raw = path.read_text(encoding="utf-8") if path.suffix.lower() in {".md", ".txt"} else ""
+                if path.suffix.lower() == ".md":
+                    meta, body = self._parse_yaml_frontmatter(raw)
+                    source_url = (meta.get("source_url") or "").strip()
+                    text = body.strip()
+                else:
+                    text = self._load_text(path).strip()
+
                 if not text:
                     raise ValueError("Document is empty")
 
@@ -157,6 +185,7 @@ class KnowledgeIndexer:
                         "document_title": title,
                         "chunk_index": i,
                         "source_path": rel_path,
+                        "source_url": source_url,
                     }
                     for i in range(len(chunks))
                 ]
