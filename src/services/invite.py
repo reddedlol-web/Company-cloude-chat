@@ -221,17 +221,19 @@ class InviteService:
         return self.format_uses_label(count, max_uses)
 
     def format_create_message(self, result: InviteCreateResult) -> str:
+        from html import escape
+
         from src.utils.timefmt import format_msk_date
 
-        label_part = f"«{result.label}»" if result.label else "(без метки)"
+        label_part = f"«{escape(result.label)}»" if result.label else "(без метки)"
         uses_label = self.format_uses_label(0, result.max_uses)
         expires = format_msk_date(result.expires_at)
         lines = [
             f"🔗 Приглашение создано: {label_part}",
-            f"Ссылка: {result.link}",
-            f"Срок: до {expires} | Использований: {uses_label}",
+            f"Ссылка: {escape(result.link)}",
+            f"Срок: до {escape(expires)} | Использований: {escape(uses_label)}",
         ]
         if result.password_plain:
-            lines.append(f"Пароль: {result.password_plain}")
+            lines.append(f"Пароль: {escape(result.password_plain)}")
         lines.append("Список и отзыв: /invites")
         return "\n".join(lines)

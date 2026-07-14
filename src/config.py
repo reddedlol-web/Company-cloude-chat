@@ -1,8 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -15,8 +16,12 @@ class Settings(BaseSettings):
     telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN")
     openrouter_api_key: str = Field(alias="OPENROUTER_API_KEY")
 
-    allowed_user_ids: list[int] = Field(default_factory=list, alias="ALLOWED_USER_IDS")
-    admin_user_ids: list[int] = Field(default_factory=list, alias="ADMIN_USER_IDS")
+    allowed_user_ids: Annotated[list[int], NoDecode] = Field(
+        default_factory=list, alias="ALLOWED_USER_IDS"
+    )
+    admin_user_ids: Annotated[list[int], NoDecode] = Field(
+        default_factory=list, alias="ADMIN_USER_IDS"
+    )
 
     daily_query_limit: int = Field(default=20, alias="DAILY_QUERY_LIMIT")
     max_question_length: int = Field(default=2000, alias="MAX_QUESTION_LENGTH")

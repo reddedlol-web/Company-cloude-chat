@@ -49,16 +49,19 @@ def create_admin_router(
 
         from src.utils.timefmt import to_msk
 
+        from html import escape
+
         lines = ["📋 Активные приглашения:"]
         buttons: list[list[InlineKeyboardButton]] = []
         for i, inv in enumerate(invites, 1):
-            label = inv.get("label") or "без метки"
-            uses = invite_service.get_invite_uses_label(inv)
+            label = escape(inv.get("label") or "без метки")
+            uses = escape(invite_service.get_invite_uses_label(inv))
             exp_dt = datetime.fromisoformat(inv["expires_at"])
-            exp = to_msk(exp_dt).strftime("%d.%m")
-            link = invite_service.build_link(inv["token"])
+            exp = escape(to_msk(exp_dt).strftime("%d.%m"))
+            link = escape(invite_service.build_link(inv["token"]))
             lines.append(f"{i}. {label} — {uses} — до {exp}\n{link}")
-            btn_label = f"Отозвать: {label}" if inv.get("label") else f"Отозвать #{i}"
+            raw_label = inv.get("label") or ""
+            btn_label = f"Отозвать: {raw_label}" if raw_label else f"Отозвать #{i}"
             if len(btn_label) > 64:
                 btn_label = f"Отозвать #{i}"
             buttons.append(

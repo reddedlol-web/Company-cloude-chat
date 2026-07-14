@@ -7,6 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from src.analytics.scheduler import create_scheduler
+from src.bot.commands_menu import setup_bot_commands
 from src.bot.handlers.admin import create_admin_router
 from src.bot.handlers.analytics import create_analytics_router
 from src.bot.handlers.commands import create_commands_router
@@ -39,6 +40,7 @@ async def run_bot(settings: Settings) -> None:
     me = await bot.get_me()
     bot_username = settings.bot_username or me.username or "bot"
     invite_service = InviteService(settings, repository, bot_username)
+    await setup_bot_commands(bot, settings)
 
     dp = Dispatcher(storage=MemoryStorage())
 
