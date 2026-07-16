@@ -1,0 +1,80 @@
+# Template from ecosystem/ECOSYSTEM_ROADMAP.md §3.2 (Q3-5)
+name: security
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: npm audit / pip-audit
+        run: |
+          set -euo pipefail
+          audited=0
+
+          while IFS= read -r -d '' lock; do
+            dir=$(dirname "$lock")
+            echo "==> npm audit in ${dir}"
+            (cd "$dir" && npm audit --audit-level=high)
+            audited=1
+          done < <(find . -name package-lock.json \
+            -not -path '*/node_modules/*' \
+            -not -path '*/.venv/*' \
+            -print0)
+
+          if [ -f pyproject.toml ]; then
+            echo "==> pip-audit (pyproject.toml)"
+            python -m pip install -q pip-audit
+            pip-audit
+            audited=1
+          fi
+
+          while IFS= read -r -d '' req; do
+            case "$req" in
+              */practice/*|*/agent-skills/*|*/.agents/*|*/requirements-dev.txt|*/requirements-test.txt|*/requirements-scripts.txt)
+                echo "==> skip ${req}"
+                continue
+                ;;
+            esac
+            echo "==> pip-audit -r ${req}"
+            python -m pip install -q pip-audit
+            pip-audit -r "$req"
+            audited=1
+          done < <(find . -name 'requirements*.txt' \
+            -not -path '*/node_modules/*' \
+            -not -path '*/.venv/*' \
+            -print0)
+
+          # Nested Python apps (e.g. TV-dashboard/backend)
+          while IFS= read -r -d '' pyproj; do
+            dir=$(dirname "$pyproj")
+            if [ "$dir" = "." ]; then
+              continue
+            fi
+            echo "==> pip-audit in ${dir}"
+            python -m pip install -q pip-audit
+            (cd "$dir" && pip-audit)
+            audited=1
+          done < <(find . -name pyproject.toml \
+            -not -path '*/node_modules/*' \
+            -not -path '*/.venv/*' \
+            -print0)
+
+          if [ "$audited" -eq 0 ]; then
+            echo "No package-lock.json / pyproject.toml / requirements.txt found — nothing to audit."
+          fi
