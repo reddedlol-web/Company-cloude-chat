@@ -1,0 +1,10 @@
+---
+description: Safe git push defaults
+alwaysApply: true
+---
+
+# Git hygiene
+
+- Do not `git push --force` / `--force-with-lease` to `main` or `master` unless the user explicitly asks.
+- Do not amend pushed commits unless the user explicitly asks.
+- Do not update git config.
